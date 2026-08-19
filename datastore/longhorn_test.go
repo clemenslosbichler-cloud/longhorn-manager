@@ -320,6 +320,65 @@ func TestValidateSettingDefaultControlPath(t *testing.T) {
 	}
 }
 
+func TestGetDefaultDataAndControlPath(t *testing.T) {
+	const testNamespace = "longhorn-system"
+
+	tests := map[string]struct {
+		existingObjects     []runtime.Object
+		expectedDataPath    string
+		expectedControlPath string
+	}{
+		"uses setting values": {
+			existingObjects: []runtime.Object{
+				&longhorn.Setting{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      string(types.SettingNameDefaultDataPath),
+						Namespace: testNamespace,
+					},
+					Value: "/data/longhorn/",
+				},
+				&longhorn.Setting{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      string(types.SettingNameDefaultControlPath),
+						Namespace: testNamespace,
+					},
+					Value: "/control/longhorn/",
+				},
+			},
+			expectedDataPath:    "/data/longhorn",
+			expectedControlPath: "/control/longhorn",
+		},
+		"falls back to historical defaults when settings are missing": {
+			expectedDataPath:    types.DefaultDataPath,
+			expectedControlPath: types.DefaultControlPath,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			lhClient := lhfake.NewSimpleClientset(tc.existingObjects...) // nolint: staticcheck
+			kubeClient := fake.NewSimpleClientset()                      // nolint: staticcheck
+			extensionsClient := apiextensionsfake.NewSimpleClientset()   // nolint: staticcheck
+			informerFactories := util.NewInformerFactories(testNamespace, kubeClient, lhClient, 0)
+			ds := NewDataStore(testNamespace, lhClient, kubeClient, extensionsClient, informerFactories)
+
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			informerFactories.Start(stopCh)
+
+			require.True(t, cache.WaitForCacheSync(stopCh, ds.SettingInformer.HasSynced))
+
+			dataPath, err := ds.GetDefaultDataPath()
+			require.NoError(t, err)
+			require.Equal(t, tc.expectedDataPath, dataPath)
+
+			controlPath, err := ds.GetDefaultControlPath()
+			require.NoError(t, err)
+			require.Equal(t, tc.expectedControlPath, controlPath)
+		})
+	}
+}
+
 func TestValidateSettingDefaultDataPathImmutability(t *testing.T) {
 	const testNamespace = "longhorn-system"
 

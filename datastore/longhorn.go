@@ -1111,6 +1111,24 @@ func (s *DataStore) GetSetting(sName types.SettingName) (*longhorn.Setting, erro
 	return resultRO.DeepCopy(), nil
 }
 
+func (s *DataStore) GetDefaultDataPath() (string, error) {
+	setting, err := s.GetSettingWithAutoFillingRO(types.SettingNameDefaultDataPath)
+	if err != nil {
+		return "", err
+	}
+
+	return types.GetLonghornDataPath(setting.Value), nil
+}
+
+func (s *DataStore) GetDefaultControlPath() (string, error) {
+	setting, err := s.GetSettingWithAutoFillingRO(types.SettingNameDefaultControlPath)
+	if err != nil {
+		return "", err
+	}
+
+	return types.GetLonghornControlPath(setting.Value), nil
+}
+
 // GetSettingValueExisted returns the value of the given setting name.
 // Returns error if the setting does not exist or value is empty
 func (s *DataStore) GetSettingValueExisted(sName types.SettingName) (string, error) {
